@@ -1,7 +1,7 @@
 // StreamingApp Frontend Pipeline
 // Multi-stage build: Node build -> Nginx production
 pipeline {
-  agent { label 'ec2-agent c7i-flex-large' }
+  agent { label 'ec2-agent t3-small' }
   options {
     timestamps()
     buildDiscarder(logRotator(numToKeepStr: '20'))
