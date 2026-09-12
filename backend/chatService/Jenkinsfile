@@ -1,0 +1,60 @@
+// StreamingApp Chat Service Pipeline
+pipeline {
+  agent { label 'ec2-agent t3-small' }
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+  }
+  parameters {
+    string(name: 'AWS_REGION', defaultValue: 'ap-southeast-1', description: 'AWS region')
+    string(name: 'IMAGE_TAG', defaultValue: '1.0.0', description: 'Docker image tag')
+    booleanParam(name: 'PUSH_TO_ECR', defaultValue: true, description: 'Push image to ECR')
+  }
+  environment {
+    AWS_DEFAULT_REGION = "${params.AWS_REGION}"
+    SERVICE = "streamingapp-chat"
+    BUILD_CONTEXT = "backend"
+    DOCKERFILE_PATH = "backend/chatService/Dockerfile"
+  }
+  stages {
+    stage('Prepare') {
+      steps {
+        script {
+          env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+          env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
+        }
+      }
+    }
+    stage('Docker Login') {
+      steps {
+        sh 'aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"'
+      }
+    }
+    stage('Ensure Repository') {
+      steps {
+        sh 'aws ecr describe-repositories --repository-names "$SERVICE" --region "$AWS_REGION" >/dev/null 2>&1 || aws ecr create-repository --repository-name "$SERVICE" --region "$AWS_REGION" --image-scanning-configuration scanOnPush=true --encryption-configuration encryptionType=AES256 >/dev/null'
+      }
+    }
+    stage('Build Image') {
+      steps {
+        sh 'docker build -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" -t "$ECR_REGISTRY/$SERVICE:latest" -f "$DOCKERFILE_PATH" "$BUILD_CONTEXT"'
+      }
+    }
+    stage('Push to ECR') {
+      when { expression { return params.PUSH_TO_ECR } }
+      steps {
+        sh 'docker push "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" && docker push "$ECR_REGISTRY/$SERVICE:latest"'
+      }
+    }
+    stage('Cleanup') {
+      steps {
+        sh 'docker rmi "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" "$ECR_REGISTRY/$SERVICE:latest" || true'
+      }
+    }
+  }
+  post {
+    success { echo "✅ Chat Service completed" }
+    failure { echo "❌ Chat Service failed" }
+  }
+}
