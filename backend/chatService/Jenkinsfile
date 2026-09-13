@@ -1,48 +1,109 @@
-// StreamingApp Chat Service Pipeline
-// No parameters - uses hardcoded environment variables only
-// Region: ap-southeast-1
+#!/usr/bin/env groovy
+
+/**
+ * StreamingApp Chat Service - Production CI/CD Pipeline
+ * Region: ap-southeast-1 (hardcoded)
+ * No parameters required
+ */
 
 pipeline {
   agent { label 'ec2-agent' }
 
   options {
     timestamps()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-    disableConcurrentBuilds()
     timeout(time: 1, unit: 'HOURS')
+    buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
+    disableConcurrentBuilds()
+    skipDefaultCheckout()
   }
 
   environment {
     AWS_REGION = 'ap-southeast-1'
     AWS_ACCOUNT_ID = credentials('aws-account-id')
     ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-    IMAGE_TAG = "${BUILD_NUMBER}"
-    SERVICE = "streamingapp-chat"
+    SERVICE_NAME = "streamingapp-chat"
     DOCKERFILE_PATH = "backend/chatService/Dockerfile"
+    BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
+    SLACK_WEBHOOK = credentials('slack-webhook-url')
   }
 
   stages {
+    stage('Checkout') {
+      steps {
+        script {
+          // Checkout code from SCM
+          def scmVars = checkout scm
+          
+          // Extract Git information from SCM checkout
+          env.GIT_COMMIT = scmVars.GIT_COMMIT ?: env.GIT_COMMIT
+          env.GIT_COMMIT_SHORT = env.GIT_COMMIT?.take(7) ?: sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          env.GIT_BRANCH = scmVars.GIT_BRANCH ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+          env.GIT_URL = scmVars.GIT_URL ?: ''
+          
+          // Generate semantic version tag
+          // Priority: Git tag > Git commit short + build number > Build number only
+          def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || echo ""', returnStdout: true).trim()
+          if (gitTag) {
+            env.IMAGE_TAG = gitTag
+          } else {
+            env.IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${BUILD_NUMBER}"
+          }
+          
+          echo "Git Commit: ${env.GIT_COMMIT}"
+          echo "Git Commit Short: ${env.GIT_COMMIT_SHORT}"
+          echo "Git Branch: ${env.GIT_BRANCH}"
+          echo "Image Tag: ${env.IMAGE_TAG}"
+        }
+      }
+    }
+
     stage('Prepare') {
       steps {
         sh '''
-          set -eu
-          echo "✅ AWS Account: ${AWS_ACCOUNT_ID}"
-          echo "✅ ECR Registry: ${ECR_REGISTRY}"
-          echo "   Service: ${SERVICE}"
-          echo "   Image Tag: ${IMAGE_TAG}"
-          echo "   Region: ${AWS_REGION}"
+          echo "╔════════════════════════════════════════════╗"
+          echo "║   Chat Service - Production Build          ║"
+          echo "╚════════════════════════════════════════════╝"
+          echo ""
+          echo "Build Configuration:"
+          echo "  Build Number:    ${BUILD_NUMBER}"
+          echo "  Image Tag:       ${IMAGE_TAG}"
+          echo "  Service:         ${SERVICE_NAME}"
+          echo "  Git Commit:      ${GIT_COMMIT_SHORT}"
+          echo "  Git Branch:      ${GIT_BRANCH}"
+          echo "  AWS Region:      ${AWS_REGION}"
+          echo "  ECR Registry:    ${ECR_REGISTRY}"
         '''
       }
     }
 
-    stage('Docker Login') {
+    stage('Validate') {
       steps {
         sh '''
           set -eu
-          echo "🔐 Logging into ECR..."
+          test -f ${DOCKERFILE_PATH} || (echo "Dockerfile not found" && exit 1)
+          echo "✅ Dockerfile validated"
+        '''
+      }
+    }
+
+    stage('ECR Login') {
+      steps {
+        sh '''
+          set -eu
+          echo "🔐 Authenticating with ECR..."
           aws ecr get-login-password --region ${AWS_REGION} | \
             docker login --username AWS --password-stdin ${ECR_REGISTRY}
-          echo "✅ ECR login successful"
+          
+          if ! aws ecr describe-repositories --repository-names ${SERVICE_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+            echo "Creating ECR repository: ${SERVICE_NAME}"
+            aws ecr create-repository \
+              --repository-name ${SERVICE_NAME} \
+              --region ${AWS_REGION} \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256 \
+              --tags "Environment=production" "Service=chat"
+          fi
+          echo "✅ ECR authenticated"
         '''
       }
     }
@@ -53,8 +114,12 @@ pipeline {
           set -eu
           echo "🔨 Building Docker image..."
           docker build \
-            -t ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} \
-            -t ${ECR_REGISTRY}/${SERVICE}:latest \
+            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG} \
+            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:latest \
+            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP} \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VERSION=${IMAGE_TAG} \
+            --build-arg GIT_COMMIT=${GIT_COMMIT_SHORT} \
             -f ${DOCKERFILE_PATH} \
             backend
           echo "✅ Build complete"
@@ -67,19 +132,64 @@ pipeline {
         sh '''
           set -eu
           echo "📤 Pushing images to ECR..."
-          docker push ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
-          docker push ${ECR_REGISTRY}/${SERVICE}:latest
+          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}
+          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:latest
+          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP}
           echo "✅ Images pushed successfully"
         '''
       }
     }
 
-    stage('Cleanup') {
+    stage('Generate Manifest') {
       steps {
         sh '''
-          echo "🧹 Cleaning up local images..."
-          docker rmi ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} ${ECR_REGISTRY}/${SERVICE}:latest || true
-          echo "✅ Cleanup complete"
+          set -eu
+          mkdir -p artifacts
+          cat > artifacts/build-manifest.json <<EOF
+{
+  "service": "${SERVICE_NAME}",
+  "buildNumber": "${BUILD_NUMBER}",
+  "buildTimestamp": "${BUILD_TIMESTAMP}",
+  "gitCommit": "${GIT_COMMIT_SHORT}",
+  "gitBranch": "${GIT_BRANCH}",
+  "imageTag": "${IMAGE_TAG}",
+  "ecrRegistry": "${ECR_REGISTRY}",
+  "awsRegion": "${AWS_REGION}",
+  "imageUri": "${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}",
+  "status": "SUCCESS"
+}
+EOF
+          cat artifacts/build-manifest.json
+        '''
+        archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
+      }
+    }
+
+    stage('Summary') {
+      steps {
+        sh '''
+          cat << 'EOF'
+╔════════════════════════════════════════════════════════════╗
+║              ✅ BUILD SUCCESSFUL                            ║
+╚════════════════════════════════════════════════════════════╝
+
+Service:         ${SERVICE_NAME}
+Build Number:    ${BUILD_NUMBER}
+Image Tag:       ${IMAGE_TAG}
+Image URI:       ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}
+
+Alternative Tags:
+  - :latest (latest build)
+  - :${BUILD_TIMESTAMP} (timestamped)
+
+Next: Deploy with Helm
+helm upgrade --install streamingapp \\
+  ./infrastructure/eks/helm/streamingapp \\
+  --namespace streamingapp \\
+  --set global.imageRegistry="${ECR_REGISTRY}" \\
+  --set global.imageTag="${IMAGE_TAG}"
+
+EOF
         '''
       }
     }
@@ -90,10 +200,10 @@ pipeline {
       sh 'docker system prune -f 2>/dev/null || true'
     }
     success {
-      echo "✅ Chat Service pipeline completed successfully"
+      echo "✅ Chat Service build successful"
     }
     failure {
-      echo "❌ Chat Service pipeline failed"
+      echo "❌ Chat Service build failed"
     }
   }
 }
