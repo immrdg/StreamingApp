@@ -6,13 +6,13 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
-COPY package*.json ./
+COPY authService/package*.json ./
 
-# Install dependencies (production only, no scripts for bcrypt rebuild later)
+# Install dependencies (production only)
 RUN npm ci --only=production || npm install --only=production
 
 # Copy application code
-COPY . .
+COPY authService/ ./
 
 ENV NODE_ENV=production
 EXPOSE 3001
