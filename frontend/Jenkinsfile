@@ -1,159 +1,242 @@
+```groovy
 #!/usr/bin/env groovy
 
 /**
  * StreamingApp Frontend - Production CI/CD Pipeline
- * Region: ap-southeast-1 (hardcoded)
+ * Region: ap-southeast-1
  * No parameters required
  */
 
 pipeline {
-  agent { label 'ec2-agent' }
 
-  options {
-    timestamps()
-    timeout(time: 1, unit: 'HOURS')
-    buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
-    disableConcurrentBuilds()
-    skipDefaultCheckout()
-  }
+    agent {
+        label 'ec2-agent'
+    }
 
-  environment {
-    AWS_REGION = 'ap-southeast-1'
-    AWS_ACCOUNT_ID = credentials('aws-account-id')
-    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-    SERVICE_NAME = "streamingapp-frontend"
-    DOCKERFILE_PATH = "frontend/Dockerfile"
-    APP_BASE_URL = 'http://streamingapp.local'
-    BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
-  }
+    options {
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(
+            logRotator(
+                numToKeepStr: '30',
+                artifactNumToKeepStr: '10'
+            )
+        )
+        disableConcurrentBuilds()
+        skipDefaultCheckout()
+    }
 
-  stages {
-    stage('Checkout') {
-      steps {
-        script {
-          // Checkout code from SCM
-          def scmVars = checkout scm
-          
-          // Extract Git information from SCM checkout
-          env.GIT_COMMIT = scmVars.GIT_COMMIT ?: env.GIT_COMMIT
-          env.GIT_COMMIT_SHORT = env.GIT_COMMIT?.take(7) ?: sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-          env.GIT_BRANCH = scmVars.GIT_BRANCH ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
-          env.GIT_URL = scmVars.GIT_URL ?: ''
-          
-          // Generate semantic version tag
-          // Priority: Git tag > Git commit short + build number > Build number only
-          def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || echo ""', returnStdout: true).trim()
-          if (gitTag) {
-            env.IMAGE_TAG = gitTag
-          } else {
-            env.IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${BUILD_NUMBER}"
-          }
-          
-          echo "Git Commit: ${env.GIT_COMMIT}"
-          echo "Git Commit Short: ${env.GIT_COMMIT_SHORT}"
-          echo "Git Branch: ${env.GIT_BRANCH}"
-          echo "Image Tag: ${env.IMAGE_TAG}"
+    environment {
+        AWS_REGION = 'ap-southeast-1'
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        SERVICE_NAME = 'streamingapp-frontend'
+        DOCKERFILE_PATH = 'frontend/Dockerfile'
+        APP_BASE_URL = 'http://streamingapp.local'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                script {
+                    echo 'Checking out source code...'
+
+                    def scmVars = checkout scm
+
+                    env.GIT_COMMIT = scmVars.GIT_COMMIT ?: sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.GIT_COMMIT_SHORT = env.GIT_COMMIT.take(7)
+
+                    env.GIT_BRANCH = scmVars.GIT_BRANCH ?: sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.GIT_URL = scmVars.GIT_URL ?: ''
+
+                    /*
+                     * Generate semantic version tag
+                     *
+                     * Priority:
+                     * 1. Exact Git tag
+                     * 2. Git commit short + Jenkins build number
+                     */
+                    def gitTag = sh(
+                        script: 'git describe --tags --exact-match 2>/dev/null || true',
+                        returnStdout: true
+                    ).trim()
+
+                    if (gitTag) {
+                        env.IMAGE_TAG = gitTag
+                    } else {
+                        env.IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${env.BUILD_NUMBER}"
+                    }
+
+                    echo "Git Commit       : ${env.GIT_COMMIT}"
+                    echo "Git Commit Short : ${env.GIT_COMMIT_SHORT}"
+                    echo "Git Branch       : ${env.GIT_BRANCH}"
+                    echo "Image Tag        : ${env.IMAGE_TAG}"
+                }
+            }
         }
-      }
-    }
 
-    stage('Prepare') {
-      steps {
-        sh '''
-          echo "╔════════════════════════════════════════════╗"
-          echo "║   Frontend - Production Build              ║"
-          echo "╚════════════════════════════════════════════╝"
-          echo ""
-          echo "Build Configuration:"
-          echo "  Build Number:    ${BUILD_NUMBER}"
-          echo "  Image Tag:       ${IMAGE_TAG}"
-          echo "  Service:         ${SERVICE_NAME}"
-          echo "  Git Commit:      ${GIT_COMMIT_SHORT}"
-          echo "  Git Branch:      ${GIT_BRANCH}"
-          echo "  AWS Region:      ${AWS_REGION}"
-          echo "  ECR Registry:    ${ECR_REGISTRY}"
-          echo "  Base URL:        ${APP_BASE_URL}"
-        '''
-      }
-    }
+        stage('Prepare') {
+            steps {
+                script {
+                    env.BUILD_TIMESTAMP = sh(
+                        script: "date -u +%Y%m%d_%H%M%S",
+                        returnStdout: true
+                    ).trim()
+                }
 
-    stage('Validate') {
-      steps {
-        sh '''
-          set -eu
-          test -f ${DOCKERFILE_PATH} || (echo "Dockerfile not found" && exit 1)
-          echo "✅ Dockerfile validated"
-        '''
-      }
-    }
+                sh '''
+                    echo "╔════════════════════════════════════════════╗"
+                    echo "║   Frontend - Production Build              ║"
+                    echo "╚════════════════════════════════════════════╝"
+                    echo ""
 
-    stage('ECR Login') {
-      steps {
-        sh '''
-          set -eu
-          echo "🔐 Authenticating with ECR..."
-          aws ecr get-login-password --region ${AWS_REGION} | \
-            docker login --username AWS --password-stdin ${ECR_REGISTRY}
-          
-          if ! aws ecr describe-repositories --repository-names ${SERVICE_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-            echo "Creating ECR repository: ${SERVICE_NAME}"
-            aws ecr create-repository \
-              --repository-name ${SERVICE_NAME} \
-              --region ${AWS_REGION} \
-              --image-scanning-configuration scanOnPush=true \
-              --encryption-configuration encryptionType=AES256 \
-              --tags "Environment=production" "Service=frontend"
-          fi
-          echo "✅ ECR authenticated"
-        '''
-      }
-    }
+                    echo "Build Configuration:"
+                    echo "  Build Number:    ${BUILD_NUMBER}"
+                    echo "  Image Tag:       ${IMAGE_TAG}"
+                    echo "  Service:         ${SERVICE_NAME}"
+                    echo "  Git Commit:      ${GIT_COMMIT_SHORT}"
+                    echo "  Git Branch:      ${GIT_BRANCH}"
+                    echo "  AWS Region:      ${AWS_REGION}"
+                    echo "  ECR Registry:    ${ECR_REGISTRY}"
+                    echo "  Base URL:        ${APP_BASE_URL}"
+                    echo "  Build Timestamp: ${BUILD_TIMESTAMP}"
+                '''
+            }
+        }
 
-    stage('Build Image') {
-      steps {
-        sh '''
-          set -eu
-          echo "🔨 Building Docker image..."
-          BASE_URL="${APP_BASE_URL%/}"
-          docker build \
-            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG} \
-            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:latest \
-            --tag ${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP} \
-            --build-arg REACT_APP_AUTH_API_URL="${BASE_URL}/api/auth" \
-            --build-arg REACT_APP_STREAMING_API_URL="${BASE_URL}/api" \
-            --build-arg REACT_APP_STREAMING_PUBLIC_URL="${BASE_URL}" \
-            --build-arg REACT_APP_ADMIN_API_URL="${BASE_URL}/api/admin" \
-            --build-arg REACT_APP_CHAT_API_URL="${BASE_URL}/api/chat" \
-            --build-arg REACT_APP_CHAT_SOCKET_URL="${BASE_URL}" \
-            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-            --build-arg VERSION=${IMAGE_TAG} \
-            --build-arg GIT_COMMIT=${GIT_COMMIT_SHORT} \
-            -f ${DOCKERFILE_PATH} \
-            frontend
-          echo "✅ Build complete"
-        '''
-      }
-    }
+        stage('Validate') {
+            steps {
+                sh '''
+                    set -eu
 
-    stage('Push to ECR') {
-      steps {
-        sh '''
-          set -eu
-          echo "📤 Pushing images to ECR..."
-          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}
-          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:latest
-          docker push ${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP}
-          echo "✅ Images pushed successfully"
-        '''
-      }
-    }
+                    echo "Checking required tools..."
 
-    stage('Generate Manifest') {
-      steps {
-        sh '''
-          set -eu
-          mkdir -p artifacts
-          cat > artifacts/build-manifest.json <<EOF
+                    command -v git
+                    command -v docker
+                    command -v aws
+
+                    test -f "${DOCKERFILE_PATH}" || {
+                        echo "Dockerfile not found: ${DOCKERFILE_PATH}"
+                        exit 1
+                    }
+
+                    echo "Git version:"
+                    git --version
+
+                    echo "Docker version:"
+                    docker --version
+
+                    echo "AWS CLI version:"
+                    aws --version
+
+                    echo "Dockerfile validated"
+                '''
+            }
+        }
+
+        stage('ECR Login') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Authenticating with ECR..."
+
+                    aws ecr get-login-password \
+                        --region "${AWS_REGION}" |
+                        docker login \
+                        --username AWS \
+                        --password-stdin "${ECR_REGISTRY}"
+
+                    if ! aws ecr describe-repositories \
+                        --repository-names "${SERVICE_NAME}" \
+                        --region "${AWS_REGION}" >/dev/null 2>&1
+                    then
+                        echo "Creating ECR repository: ${SERVICE_NAME}"
+
+                        aws ecr create-repository \
+                            --repository-name "${SERVICE_NAME}" \
+                            --region "${AWS_REGION}" \
+                            --image-scanning-configuration scanOnPush=true \
+                            --encryption-configuration encryptionType=AES256 \
+                            --tags \
+                                Key=Environment,Value=production \
+                                Key=Service,Value=frontend
+                    fi
+
+                    echo "ECR authentication successful"
+                '''
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Building Docker image..."
+
+                    BASE_URL="${APP_BASE_URL%/}"
+
+                    docker build \
+                        --tag "${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}" \
+                        --tag "${ECR_REGISTRY}/${SERVICE_NAME}:latest" \
+                        --tag "${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP}" \
+                        --build-arg "REACT_APP_AUTH_API_URL=${BASE_URL}/api/auth" \
+                        --build-arg "REACT_APP_STREAMING_API_URL=${BASE_URL}/api" \
+                        --build-arg "REACT_APP_STREAMING_PUBLIC_URL=${BASE_URL}" \
+                        --build-arg "REACT_APP_ADMIN_API_URL=${BASE_URL}/api/admin" \
+                        --build-arg "REACT_APP_CHAT_API_URL=${BASE_URL}/api/chat" \
+                        --build-arg "REACT_APP_CHAT_SOCKET_URL=${BASE_URL}" \
+                        --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+                        --build-arg "VERSION=${IMAGE_TAG}" \
+                        --build-arg "GIT_COMMIT=${GIT_COMMIT_SHORT}" \
+                        --file "${DOCKERFILE_PATH}" \
+                        frontend
+
+                    echo "Docker image build complete"
+                '''
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Pushing images to ECR..."
+
+                    docker push \
+                        "${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
+
+                    docker push \
+                        "${ECR_REGISTRY}/${SERVICE_NAME}:latest"
+
+                    docker push \
+                        "${ECR_REGISTRY}/${SERVICE_NAME}:${BUILD_TIMESTAMP}"
+
+                    echo "Images pushed successfully"
+                '''
+            }
+        }
+
+        stage('Generate Manifest') {
+            steps {
+                sh '''
+                    set -eu
+
+                    mkdir -p artifacts
+
+                    cat > artifacts/build-manifest.json <<EOF
 {
   "service": "${SERVICE_NAME}",
   "buildNumber": "${BUILD_NUMBER}",
@@ -167,18 +250,24 @@ pipeline {
   "status": "SUCCESS"
 }
 EOF
-          cat artifacts/build-manifest.json
-        '''
-        archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
-      }
-    }
 
-    stage('Summary') {
-      steps {
-        sh '''
-          cat << 'EOF'
+                    cat artifacts/build-manifest.json
+                '''
+
+                archiveArtifacts(
+                    artifacts: 'artifacts/**',
+                    fingerprint: true
+                )
+            }
+        }
+
+        stage('Summary') {
+            steps {
+                sh '''
+                    cat <<EOF
+
 ╔════════════════════════════════════════════════════════════╗
-║              ✅ BUILD SUCCESSFUL                            ║
+║              BUILD SUCCESSFUL                             ║
 ╚════════════════════════════════════════════════════════════╝
 
 Service:         ${SERVICE_NAME}
@@ -187,10 +276,11 @@ Image Tag:       ${IMAGE_TAG}
 Image URI:       ${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}
 
 Alternative Tags:
-  - :latest (latest build)
-  - :${BUILD_TIMESTAMP} (timestamped)
+  - :latest
+  - :${BUILD_TIMESTAMP}
 
 Next: Deploy with Helm
+
 helm upgrade --install streamingapp \\
   ./infrastructure/eks/helm/streamingapp \\
   --namespace streamingapp \\
@@ -198,22 +288,34 @@ helm upgrade --install streamingapp \\
   --set global.imageTag="${IMAGE_TAG}"
 
 EOF
-        '''
-      }
+                '''
+            }
+        }
     }
-  }
 
-  post {
-    success {
-      echo "✅ Frontend build successful"
+    post {
+
+        success {
+            echo 'Frontend build successful'
+        }
+
+        failure {
+            echo 'Frontend build failed'
+        }
+
+        cleanup {
+            script {
+                try {
+                    sh '''
+                        if command -v docker >/dev/null 2>&1; then
+                            docker system prune -f 2>/dev/null || true
+                        fi
+                    '''
+                } catch (Exception e) {
+                    echo "Docker cleanup skipped: ${e.getMessage()}"
+                }
+            }
+        }
     }
-    failure {
-      echo "❌ Frontend build failed"
-    }
-    cleanup {
-      script {
-        sh 'docker system prune -f 2>/dev/null || true'
-      }
-    }
-  }
 }
+```
