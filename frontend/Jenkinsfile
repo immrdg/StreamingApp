@@ -19,9 +19,6 @@ pipeline {
 
     environment {
         AWS_REGION = 'ap-southeast-1'
-        AWS_ACCOUNT_ID = credentials('aws-account-id')
-        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
         SERVICE_NAME = 'streamingapp-frontend'
         DOCKERFILE_PATH = 'frontend/Dockerfile'
         APP_BASE_URL = 'http://streamingapp.local'
@@ -47,6 +44,16 @@ pipeline {
                         script: 'git rev-parse --abbrev-ref HEAD',
                         returnStdout: true
                     ).trim()
+
+                    /**
+                     * Get AWS Account ID dynamically
+                     */
+                    env.AWS_ACCOUNT_ID = sh(
+                        script: 'aws sts get-caller-identity --query Account --output text',
+                        returnStdout: true
+                    ).trim()
+                    
+                    env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
 
                     env.GIT_URL = scmVars.GIT_URL ?: ''
 

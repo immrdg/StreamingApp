@@ -19,8 +19,6 @@ pipeline {
 
   environment {
     AWS_REGION = 'ap-southeast-1'
-    AWS_ACCOUNT_ID = credentials('aws-account-id')
-    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
     SERVICE_NAME = "streamingapp-admin"
     DOCKERFILE_PATH = "backend/adminService/Dockerfile"
     BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
@@ -38,6 +36,10 @@ pipeline {
           env.GIT_COMMIT_SHORT = env.GIT_COMMIT?.take(7) ?: sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
           env.GIT_BRANCH = scmVars.GIT_BRANCH ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
           env.GIT_URL = scmVars.GIT_URL ?: ''
+          
+          // Get AWS Account ID dynamically
+          env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+          env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
           
           // Generate semantic version tag
           // Priority: Git tag > Git commit short + build number > Build number only
