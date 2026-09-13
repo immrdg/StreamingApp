@@ -33,6 +33,10 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.services.streaming.port | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.config.awsRegion | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.config.awsRegion | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "streamingapp.fullname" . }}-config

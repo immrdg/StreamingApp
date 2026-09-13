@@ -13,12 +13,12 @@ imageTags:
   auth: "20260913_151828"
   admin: "20260913_151413"
   chat: "20260913_151514"
-  streaming: "3fb755a-2"
+  streaming: "f19999d-4"
 
 config:
   mongoDatabase: streamingapp
   clientUrls: "http://streamingapp.local,http://localhost:3000"
-  awsRegion: ap-southeast-1
+  awsRegion: us-east-1
   awsS3Bucket: "streamingapp-videos-1789299262"
   awsCdnUrl: ""
   streamingPublicUrl: "http://streamingapp.local"
