@@ -25,7 +25,6 @@ pipeline {
     DOCKERFILE_PATH = "frontend/Dockerfile"
     APP_BASE_URL = 'http://streamingapp.local'
     BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
-    SLACK_WEBHOOK = credentials('slack-webhook-url')
   }
 
   stages {
@@ -205,14 +204,16 @@ EOF
   }
 
   post {
-    always {
-      sh 'docker system prune -f 2>/dev/null || true'
-    }
     success {
       echo "✅ Frontend build successful"
     }
     failure {
       echo "❌ Frontend build failed"
+    }
+    cleanup {
+      script {
+        sh 'docker system prune -f 2>/dev/null || true'
+      }
     }
   }
 }

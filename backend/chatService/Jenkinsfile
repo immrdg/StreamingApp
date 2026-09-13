@@ -24,7 +24,6 @@ pipeline {
     SERVICE_NAME = "streamingapp-chat"
     DOCKERFILE_PATH = "backend/chatService/Dockerfile"
     BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
-    SLACK_WEBHOOK = credentials('slack-webhook-url')
   }
 
   stages {
@@ -196,14 +195,16 @@ EOF
   }
 
   post {
-    always {
-      sh 'docker system prune -f 2>/dev/null || true'
-    }
     success {
       echo "✅ Chat Service build successful"
     }
     failure {
       echo "❌ Chat Service build failed"
+    }
+    cleanup {
+      script {
+        sh 'docker system prune -f 2>/dev/null || true'
+      }
     }
   }
 }

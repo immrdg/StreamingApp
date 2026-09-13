@@ -24,7 +24,6 @@ pipeline {
     SERVICE_NAME = "streamingapp-streaming"
     DOCKERFILE_PATH = "backend/streamingService/Dockerfile"
     BUILD_TIMESTAMP = sh(script: 'date -u +%Y%m%d_%H%M%S', returnStdout: true).trim()
-    SLACK_WEBHOOK = credentials('slack-webhook-url')
   }
 
   stages {
@@ -196,14 +195,16 @@ EOF
   }
 
   post {
-    always {
-      sh 'docker system prune -f 2>/dev/null || true'
-    }
     success {
       echo "✅ Streaming Service build successful"
     }
     failure {
       echo "❌ Streaming Service build failed"
+    }
+    cleanup {
+      script {
+        sh 'docker system prune -f 2>/dev/null || true'
+      }
     }
   }
 }
