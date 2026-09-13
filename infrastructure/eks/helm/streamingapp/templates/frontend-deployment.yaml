@@ -24,11 +24,15 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.services.frontend.image }}:{{ .Values.global.imageTag }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.services.frontend.image }}:{{ .Values.imageTags.frontend | default .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.services.frontend.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/env-config.js
+              subPath: env-config.js
           readinessProbe:
             httpGet:
               path: {{ .Values.services.frontend.healthPath }}
@@ -43,3 +47,7 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.services.frontend.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "streamingapp.fullname" . }}-frontend-config
