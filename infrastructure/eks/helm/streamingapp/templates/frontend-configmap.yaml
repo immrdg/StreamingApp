@@ -8,7 +8,7 @@ metadata:
 data:
   env-config.js: |
     window.REACT_APP_AUTH_API_URL = "/api/auth";
-    window.REACT_APP_STREAMING_API_URL = "/api/streaming";
+    window.REACT_APP_STREAMING_API_URL = "/api";
     window.REACT_APP_STREAMING_PUBLIC_URL = "";
     window.REACT_APP_ADMIN_API_URL = "/api/admin";
     window.REACT_APP_CHAT_API_URL = "/api/chat";

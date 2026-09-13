@@ -4,6 +4,8 @@
 global:
   imageRegistry: "258274811560.dkr.ecr.ap-southeast-1.amazonaws.com"
   imagePullPolicy: Always
+  awsAccountId: "258274811560"
+  clusterName: "streamingapp-eks"
 
 # Latest image tags from ECR
 imageTags:
@@ -17,7 +19,7 @@ config:
   mongoDatabase: streamingapp
   clientUrls: "http://streamingapp.local,http://localhost:3000"
   awsRegion: ap-southeast-1
-  awsS3Bucket: ""
+  awsS3Bucket: "streamingapp-videos-1789299262"
   awsCdnUrl: ""
   streamingPublicUrl: "http://streamingapp.local"
 

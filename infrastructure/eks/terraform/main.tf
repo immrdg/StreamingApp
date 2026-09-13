@@ -326,3 +326,46 @@ resource "aws_eks_addon" "ebs_csi_driver" {
     aws_iam_role_policy_attachment.ebs_csi_driver
   ]
 }
+
+# IRSA for Streaming Service to access S3
+data "aws_iam_policy_document" "streaming_s3_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      "arn:aws:s3:::streamingapp-videos-*",
+      "arn:aws:s3:::streamingapp-videos-*/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "streaming_s3_policy" {
+  name        = "${var.cluster_name}-streaming-s3-policy"
+  description = "IAM policy for streaming service to access S3"
+  policy      = data.aws_iam_policy_document.streaming_s3_policy.json
+
+  tags = var.tags
+}
+
+module "streaming_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${var.cluster_name}-streaming-irsa"
+
+  role_policy_arns = {
+    s3_policy = aws_iam_policy.streaming_s3_policy.arn
+  }
+
+  oidc_providers = {
+    main = {
+      provider_arn               = aws_iam_openid_connect_provider.this.arn
+      namespace_service_accounts = ["streamingapp:streamingapp-streaming"]
+    }
+  }
+
+  tags = var.tags
+}
