@@ -207,10 +207,13 @@ const getThumbnail = async (req, res) => {
       });
     }
 
+    // Prepend thumbnails/ prefix if not already present
+    const s3Key = key.startsWith('thumbnails/') ? key : `thumbnails/${key}`;
+
     const { Body, ContentType, ContentLength } = await s3Client.send(
       new GetObjectCommand({
         Bucket: bucket,
-        Key: key,
+        Key: s3Key,
       }),
     );
 

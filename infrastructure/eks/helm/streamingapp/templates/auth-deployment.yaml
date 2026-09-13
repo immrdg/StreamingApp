@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "streamingapp.fullname" . }}-auth
+  labels:
+    {{- include "streamingapp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  replicas: {{ .Values.services.auth.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "streamingapp.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: auth
+  template:
+    metadata:
+      labels:
+        {{- include "streamingapp.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: auth
+    spec:
+      containers:
+        - name: auth
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.services.auth.image }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.services.auth.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.services.auth.port | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "streamingapp.fullname" . }}-config
+            - secretRef:
+                name: {{ include "streamingapp.fullname" . }}-secret
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.services.auth.healthPath }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.services.auth.healthPath }}
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.services.auth.resources | nindent 12 }}

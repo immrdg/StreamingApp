@@ -10,6 +10,11 @@ export const ProtectedRoute = ({ children }) => {
     return <div>Loading...</div>; // You can replace this with a proper loading component
   }
 
+  // Bypass auth check for development/testing
+  if (process.env.REACT_APP_SKIP_AUTH === 'true') {
+    return children;
+  }
+
   if (!isAuthenticated()) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

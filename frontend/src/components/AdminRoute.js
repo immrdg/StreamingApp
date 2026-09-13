@@ -10,6 +10,11 @@ export const AdminRoute = ({ children }) => {
     return <div>Loading...</div>;
   }
 
+  // Bypass admin check for development/testing
+  if (process.env.REACT_APP_SKIP_AUTH === 'true') {
+    return children;
+  }
+
   if (!user || user.role !== 'admin') {
     return <Navigate to="/browse" state={{ from: location }} replace />;
   }

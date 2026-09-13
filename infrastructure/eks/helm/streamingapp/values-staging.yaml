@@ -1,0 +1,101 @@
+# Staging Environment Values for StreamingApp Helm Chart
+
+global:
+  imageRegistry: "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+  imageTag: "latest"
+  imagePullPolicy: Always
+
+config:
+  mongoDatabase: streamingapp-staging
+  clientUrls: "https://staging.streamingapp.example.com"
+  awsRegion: us-east-1
+  awsS3Bucket: "streamingapp-videos-staging"
+  awsCdnUrl: "https://staging.streamingapp.example.com"
+  streamingPublicUrl: "https://staging.streamingapp.example.com"
+
+secrets:
+  jwtSecret: "CHANGE-THIS-TO-STAGING-SECRET"
+  awsAccessKeyId: "CHANGE-TO-STAGING-AWS-KEY"
+  awsSecretAccessKey: "CHANGE-TO-STAGING-AWS-SECRET"
+
+services:
+  auth:
+    replicas: 2
+    port: 3001
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  streaming:
+    replicas: 2
+    port: 3002
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 150m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 512Mi
+
+  admin:
+    replicas: 1
+    port: 3003
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  chat:
+    replicas: 1
+    port: 3004
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  frontend:
+    replicas: 2
+    port: 80
+    healthPath: /
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+mongo:
+  image: mongo:6
+  port: 27017
+  storageSize: 20Gi
+  storageClassName: "gp2"
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: staging.streamingapp.example.com
+  tls:
+    enabled: true
+    secretName: streamingapp-staging-tls

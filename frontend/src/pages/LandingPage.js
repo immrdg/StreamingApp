@@ -65,14 +65,14 @@ const StepCard = styled(Card)(({ theme }) => ({
 export const LandingPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (!loading && isAuthenticated()) {
       navigate('/browse', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, loading]);
 
   const features = [
     {

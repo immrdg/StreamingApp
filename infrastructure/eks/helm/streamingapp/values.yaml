@@ -1,0 +1,100 @@
+global:
+  imageRegistry: "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
+  imageTag: "1.0.0"
+  imagePullPolicy: IfNotPresent
+
+config:
+  mongoDatabase: streamingapp
+  clientUrls: "http://streamingapp.local"
+  awsRegion: ap-south-1
+  awsS3Bucket: ""
+  awsCdnUrl: ""
+  streamingPublicUrl: "http://streamingapp.local"
+
+secrets:
+  jwtSecret: "change-this-before-deploy"
+  awsAccessKeyId: ""
+  awsSecretAccessKey: ""
+
+services:
+  auth:
+    image: streamingapp-auth
+    replicas: 2
+    port: 3001
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  streaming:
+    image: streamingapp-streaming
+    replicas: 2
+    port: 3002
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  admin:
+    image: streamingapp-admin
+    replicas: 2
+    port: 3003
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  chat:
+    image: streamingapp-chat
+    replicas: 2
+    port: 3004
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  frontend:
+    image: streamingapp-frontend
+    replicas: 2
+    port: 80
+    healthPath: /
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+mongo:
+  image: mongo:6
+  port: 27017
+  storageSize: 5Gi
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: streamingapp.local
+  tls:
+    enabled: false
+    secretName: streamingapp-tls

@@ -1,0 +1,101 @@
+# Production Environment Values for StreamingApp Helm Chart
+
+global:
+  imageRegistry: "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+  imageTag: "1.0.0"
+  imagePullPolicy: IfNotPresent
+
+config:
+  mongoDatabase: streamingapp
+  clientUrls: "https://streamingapp.example.com"
+  awsRegion: us-east-1
+  awsS3Bucket: "streamingapp-videos-1789299262"
+  awsCdnUrl: "https://streamingapp.example.com"
+  streamingPublicUrl: "https://streamingapp.example.com"
+
+secrets:
+  jwtSecret: "CHANGE-THIS-TO-PRODUCTION-SECRET"
+  awsAccessKeyId: "CHANGE-TO-PROD-AWS-KEY"
+  awsSecretAccessKey: "CHANGE-TO-PROD-AWS-SECRET"
+
+services:
+  auth:
+    replicas: 3
+    port: 3001
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  streaming:
+    replicas: 3
+    port: 3002
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 300m
+        memory: 512Mi
+      limits:
+        cpu: 1500m
+        memory: 1Gi
+
+  admin:
+    replicas: 2
+    port: 3003
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  chat:
+    replicas: 2
+    port: 3004
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  frontend:
+    replicas: 3
+    port: 80
+    healthPath: /
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+mongo:
+  image: mongo:6
+  port: 27017
+  storageSize: 50Gi
+  storageClassName: "gp3"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: streamingapp.example.com
+  tls:
+    enabled: true
+    secretName: streamingapp-tls-cert

@@ -1,0 +1,18 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - ap-southeast-1
+profile: "{{ lookup('env', 'AWS_PROFILE') }}"
+filters:
+  tag:Managed: terraform
+  tag:Project: StreamingApp
+  tag:Role: Jenkins
+  instance-state-name: running
+keyed_groups:
+  - key: tags.Role
+    prefix: tag_role
+compose:
+  ansible_host: instance_id
+  ansible_connection: "'aws_ssm'"
+  ansible_aws_ssm_region: placement.region
+  ansible_aws_ssm_bucket_name: "'streamingapp-ssm-transfer-258274811560'"
+  ansible_user: "'ssm-user'"

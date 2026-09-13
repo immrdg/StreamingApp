@@ -1,0 +1,96 @@
+##
+## Jenkins Configuration as Code (JCasC).
+## Deployed by ansible/jenkins.yml on every run so the controller's security
+## realm, admin account, and EC2 cloud agents are always reproduced from code.
+## Generated from templates/jenkins.casc.yaml.j2 - do not edit on the instance.
+##
+jenkins:
+  systemMessage: "Managed by Ansible + JCasC - StreamingApp Jenkins controller"
+  numExecutors: 1
+  mode: NORMAL
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_user }}"
+          password: "{{ jenkins_admin_password }}"
+
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:{{ jenkins_admin_user }}"
+
+  clouds:
+    - amazonEC2:
+        name: "streamingapp-ec2-agents"
+        region: "{{ aws_region }}"
+        useInstanceProfileForCredentials: true
+        sshKeysCredentialsId: "jenkins-agent-ssh-key"
+        templates:
+          - ami: "{{ jenkins_agent_ami }}"
+            description: "streamingapp-t3-small"
+            type: "T3Small"
+            labelString: "ec2-agent t3-small"
+            remoteFS: "/home/ec2-user"
+            remoteAdmin: "ec2-user"
+            securityGroups: "{{ jenkins_agent_security_group_id }}"
+            subnetId: "{{ jenkins_agent_subnet_id }}"
+            iamInstanceProfile: "{{ jenkins_agent_instance_profile }}"
+            useEphemeralDevices: true
+            associateIPStrategy: PUBLIC_IP
+            minimumNumberOfInstances: {{ jenkins_agent_min_idle_instances }}
+            minimumNumberOfSpareInstances: {{ jenkins_agent_min_idle_instances }}
+            instanceCapStr: "{{ jenkins_agent_max_total_instances }}"
+            idleTerminationMinutes: "30"
+            mode: EXCLUSIVE
+            initScript: |
+              #!/bin/bash
+              sudo dnf install -y docker java-21-amazon-corretto awscli git
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker ec2-user
+            tags:
+              - name: "Name"
+                value: "streamingapp-jenkins-agent-t3-small"
+              - name: "ManagedBy"
+                value: "jenkins-ec2-plugin"
+          - ami: "{{ jenkins_agent_ami }}"
+            description: "streamingapp-c7i-flex-large"
+            type: "C7iFlexLarge"
+            labelString: "ec2-agent c7i-flex-large"
+            remoteFS: "/home/ec2-user"
+            remoteAdmin: "ec2-user"
+            securityGroups: "{{ jenkins_agent_security_group_id }}"
+            subnetId: "{{ jenkins_agent_subnet_id }}"
+            iamInstanceProfile: "{{ jenkins_agent_instance_profile }}"
+            useEphemeralDevices: true
+            associateIPStrategy: PUBLIC_IP
+            minimumNumberOfInstances: 0
+            minimumNumberOfSpareInstances: 0
+            instanceCapStr: "{{ jenkins_agent_max_total_instances }}"
+            idleTerminationMinutes: "30"
+            mode: EXCLUSIVE
+            initScript: |
+              #!/bin/bash
+              sudo dnf install -y docker java-21-amazon-corretto awscli git
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker ec2-user
+            tags:
+              - name: "Name"
+                value: "streamingapp-jenkins-agent-c7i-flex-large"
+              - name: "ManagedBy"
+                value: "jenkins-ec2-plugin"
+        instanceCapStr: "{{ jenkins_agent_max_total_instances }}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: "jenkins-agent-ssh-key"
+              username: "ec2-user"
+              privateKeySource:
+                directEntry:
+                  privateKey: |
+{{ jenkins_agent_private_key | indent(20, true) }}

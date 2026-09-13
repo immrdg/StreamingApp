@@ -1,0 +1,36 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: streamingapp-eks
+  region: ap-south-1
+  version: "1.30"
+
+availabilityZones:
+  - ap-south-1a
+  - ap-south-1b
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: streamingapp-workers
+    instanceTypes:
+      - t3.medium
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 4
+    volumeSize: 30
+    privateNetworking: false
+    ssh:
+      allow: false
+    labels:
+      workload: streamingapp
+    tags:
+      Project: StreamingApp
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: amazon-cloudwatch-observability

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "streamingapp.fullname" . }}-config
+  labels:
+    {{- include "streamingapp.labels" . | nindent 4 }}
+data:
+  MONGO_URI: "mongodb://{{ include "streamingapp.fullname" . }}-mongo:{{ .Values.mongo.port }}/{{ .Values.config.mongoDatabase }}"
+  CLIENT_URLS: {{ .Values.config.clientUrls | quote }}
+  AWS_REGION: {{ .Values.config.awsRegion | quote }}
+  AWS_S3_BUCKET: {{ .Values.config.awsS3Bucket | quote }}
+  AWS_CDN_URL: {{ .Values.config.awsCdnUrl | quote }}
+  STREAMING_PUBLIC_URL: {{ .Values.config.streamingPublicUrl | quote }}

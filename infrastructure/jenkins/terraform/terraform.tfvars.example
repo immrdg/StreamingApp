@@ -1,0 +1,6 @@
+# Use a single trusted public IP. Obtain it with: curl -4 https://ifconfig.me
+jenkins_allowed_cidrs = ["203.0.113.10/32"]
+
+# aws_region = "ap-south-1"
+# name_prefix = "streamingapp"
+# instance_type = "t3.medium"

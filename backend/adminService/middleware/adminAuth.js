@@ -2,6 +2,16 @@ const jwt = require('jsonwebtoken');
 
 const adminAuth = (req, res, next) => {
   try {
+    // Development mode: skip auth if ADMIN_AUTH_BYPASS is set
+    if (process.env.ADMIN_AUTH_BYPASS === 'true') {
+      req.user = {
+        _id: 'local-dev-user',
+        email: 'admin@localhost',
+        role: 'admin',
+      };
+      return next();
+    }
+
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 

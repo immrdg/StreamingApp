@@ -1,0 +1,148 @@
+---
+- name: Configure the StreamingApp Jenkins controller
+  hosts: tag_role_Jenkins
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install Jenkins runtime and build dependencies
+      ansible.builtin.dnf:
+        name:
+          - java-21-amazon-corretto
+          - docker
+          - fontconfig
+          - git
+          - awscli
+        state: present
+
+    - name: Remove any previously configured Jenkins repository file
+      ansible.builtin.file:
+        path: /etc/yum.repos.d/jenkins.repo
+        state: absent
+
+    - name: Download the official Jenkins stable repository file
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+        mode: "0644"
+
+    - name: Import the current Jenkins package signing key
+      ansible.builtin.rpm_key:
+        state: present
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+    - name: Clean dnf metadata cache so the new repository and key are recognized
+      ansible.builtin.command:
+        cmd: dnf clean all
+      changed_when: false
+
+    - name: Install Jenkins
+      ansible.builtin.dnf:
+        name: jenkins
+        state: present
+
+    - name: Start Docker
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Permit Jenkins builds to use the Docker daemon
+      ansible.builtin.user:
+        name: jenkins
+        groups: docker
+        append: true
+
+    - name: Download the Jenkins plugin installation manager tool
+      ansible.builtin.get_url:
+        url: https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.15.0/jenkins-plugin-manager-2.15.0.jar
+        dest: /opt/jenkins-plugin-manager.jar
+        mode: "0644"
+
+    - name: Install required Jenkins plugins (JCasC, EC2 cloud agents, Docker)
+      ansible.builtin.command:
+        cmd: >
+          java -jar /opt/jenkins-plugin-manager.jar
+          --war /usr/share/java/jenkins.war
+          --plugin-download-directory /var/lib/jenkins/plugins
+          --plugins {{ jenkins_plugins | join(' ') }}
+      environment:
+        JENKINS_UC: https://updates.jenkins.io
+      register: jenkins_plugin_install
+      changed_when: "'Skipping' not in jenkins_plugin_install.stdout"
+
+    - name: Ensure the jenkins plugin directory is owned by the jenkins user
+      ansible.builtin.file:
+        path: /var/lib/jenkins/plugins
+        owner: jenkins
+        group: jenkins
+        recurse: true
+
+    - name: Create the JCasC configuration directory
+      ansible.builtin.file:
+        path: /var/lib/jenkins/casc_configs
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0750"
+
+    - name: Deploy the Jenkins Configuration as Code file
+      ansible.builtin.template:
+        src: templates/jenkins.casc.yaml.j2
+        dest: /var/lib/jenkins/casc_configs/jenkins.yaml
+        owner: jenkins
+        group: jenkins
+        mode: "0640"
+
+    - name: Create the systemd drop-in directory for the Jenkins service
+      ansible.builtin.file:
+        path: /etc/systemd/system/jenkins.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Point Jenkins at the JCasC file and disable the setup wizard
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/jenkins.service.d/override.conf
+        content: |
+          [Service]
+          Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Dcasc.jenkins.config=/var/lib/jenkins/casc_configs/jenkins.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Determine the installed Jenkins version
+      ansible.builtin.command:
+        cmd: rpm -q --queryformat '%{VERSION}' jenkins
+      changed_when: false
+      register: jenkins_installed_version
+
+    - name: Mark the Jenkins setup wizard as already completed
+      ansible.builtin.copy:
+        dest: /var/lib/jenkins/jenkins.install.UpgradeWizard.state
+        content: "{{ jenkins_installed_version.stdout }}\n"
+        owner: jenkins
+        group: jenkins
+        mode: "0644"
+
+    - name: Mark the Jenkins install state version as current
+      ansible.builtin.copy:
+        dest: /var/lib/jenkins/jenkins.install.InstallUtil.lastExecVersion
+        content: "{{ jenkins_installed_version.stdout }}\n"
+        owner: jenkins
+        group: jenkins
+        mode: "0644"
+
+    - name: Flush handlers so systemd sees the drop-in before Jenkins starts
+      ansible.builtin.meta: flush_handlers
+
+    - name: Start and (re)start Jenkins with the current configuration
+      ansible.builtin.systemd_service:
+        name: jenkins
+        enabled: true
+        state: restarted
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

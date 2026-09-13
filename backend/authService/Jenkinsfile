@@ -1,69 +1,48 @@
 // StreamingApp Auth Service Pipeline
-// Builds from: https://github.com/immrdg/StreamingApp
-// Uses IAM instance profile for ECR access
+// No parameters - uses hardcoded environment variables only
+// Region: ap-southeast-1
 
 pipeline {
-  agent { label 'ec2-agent t3-small' }
+  agent { label 'ec2-agent' }
 
   options {
     timestamps()
     buildDiscarder(logRotator(numToKeepStr: '20'))
     disableConcurrentBuilds()
-  }
-
-  parameters {
-    string(name: 'AWS_REGION', defaultValue: 'ap-southeast-1', description: 'AWS region')
-    string(name: 'IMAGE_TAG', defaultValue: '1.0.0', description: 'Docker image tag')
-    booleanParam(name: 'PUSH_TO_ECR', defaultValue: true, description: 'Push image to ECR')
+    timeout(time: 1, unit: 'HOURS')
   }
 
   environment {
-    AWS_DEFAULT_REGION = "${params.AWS_REGION}"
+    AWS_REGION = 'ap-southeast-1'
+    AWS_ACCOUNT_ID = credentials('aws-account-id')
+    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    IMAGE_TAG = "${BUILD_NUMBER}"
     SERVICE = "streamingapp-auth"
-    BUILD_CONTEXT = "backend"
     DOCKERFILE_PATH = "backend/authService/Dockerfile"
   }
 
   stages {
     stage('Prepare') {
       steps {
-        script {
-          env.AWS_ACCOUNT_ID = sh(
-            script: 'aws sts get-caller-identity --query Account --output text',
-            returnStdout: true
-          ).trim()
-          env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
-          
-          echo "🔧 Preparing build environment"
-          echo "   Service: ${env.SERVICE}"
-          echo "   Build Context: ${env.BUILD_CONTEXT}"
-          echo "   Dockerfile: ${env.DOCKERFILE_PATH}"
-        }
+        sh '''
+          set -eu
+          echo "✅ AWS Account: ${AWS_ACCOUNT_ID}"
+          echo "✅ ECR Registry: ${ECR_REGISTRY}"
+          echo "   Service: ${SERVICE}"
+          echo "   Image Tag: ${IMAGE_TAG}"
+          echo "   Region: ${AWS_REGION}"
+        '''
       }
     }
 
     stage('Docker Login') {
       steps {
         sh '''
-          set -e
-          aws ecr get-login-password --region "$AWS_REGION" | \
-            docker login --username AWS --password-stdin "$ECR_REGISTRY"
-        '''
-      }
-    }
-
-    stage('Ensure Repository') {
-      steps {
-        sh '''
-          set -e
-          aws ecr describe-repositories \
-            --repository-names "$SERVICE" \
-            --region "$AWS_REGION" >/dev/null 2>&1 || \
-            aws ecr create-repository \
-              --repository-name "$SERVICE" \
-              --region "$AWS_REGION" \
-              --image-scanning-configuration scanOnPush=true \
-              --encryption-configuration encryptionType=AES256 >/dev/null
+          set -eu
+          echo "🔐 Logging into ECR..."
+          aws ecr get-login-password --region ${AWS_REGION} | \
+            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+          echo "✅ ECR login successful"
         '''
       }
     }
@@ -71,27 +50,26 @@ pipeline {
     stage('Build Image') {
       steps {
         sh '''
-          set -e
-          echo "🔨 Building Docker image from $BUILD_CONTEXT..."
+          set -eu
+          echo "🔨 Building Docker image..."
           docker build \
-            -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$SERVICE:latest" \
-            -f "$DOCKERFILE_PATH" \
-            "$BUILD_CONTEXT"
+            -t ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} \
+            -t ${ECR_REGISTRY}/${SERVICE}:latest \
+            -f ${DOCKERFILE_PATH} \
+            backend
           echo "✅ Build complete"
         '''
       }
     }
 
     stage('Push to ECR') {
-      when {
-        expression { return params.PUSH_TO_ECR }
-      }
       steps {
         sh '''
-          set -e
-          docker push "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$SERVICE:latest"
+          set -eu
+          echo "📤 Pushing images to ECR..."
+          docker push ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+          docker push ${ECR_REGISTRY}/${SERVICE}:latest
+          echo "✅ Images pushed successfully"
         '''
       }
     }
@@ -99,13 +77,18 @@ pipeline {
     stage('Cleanup') {
       steps {
         sh '''
-          docker rmi "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" "$ECR_REGISTRY/$SERVICE:latest" || true
+          echo "🧹 Cleaning up local images..."
+          docker rmi ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} ${ECR_REGISTRY}/${SERVICE}:latest || true
+          echo "✅ Cleanup complete"
         '''
       }
     }
   }
 
   post {
+    always {
+      sh 'docker system prune -f 2>/dev/null || true'
+    }
     success {
       echo "✅ Auth Service pipeline completed successfully"
     }

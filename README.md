@@ -86,6 +86,18 @@ REACT_APP_CHAT_SOCKET_URL=http://localhost:3004
 
 The compose file provisions MongoDB plus all four Node.js microservices. S3 credentials are optional for local testing—you can still browse seeded metadata, but streaming requires valid S3 objects.
 
+## Jenkins, ECR, and EKS Deployment
+
+This repo includes a Jenkins pipeline and Helm-based EKS deployment assets for the orchestration assignment:
+
+- `Jenkinsfile` builds all five images, creates the matching ECR repositories if missing, and pushes the selected tag.
+- `infrastructure/ecr/` contains Terraform for the five ECR repositories.
+- `infrastructure/eks/terraform/` creates the EKS VPC, cluster, managed node group, and addons.
+- `infrastructure/eks/eksctl/cluster.yaml` is kept as an alternate/reference cluster definition.
+- `infrastructure/eks/helm/streamingapp/` deploys MongoDB, the four backend services, the frontend, probes, rolling updates, Services, Secrets, ConfigMap, and Ingress.
+
+Full commands are in [`docs/eks-deployment.md`](docs/eks-deployment.md).
+
 ## Local Development
 
 Install dependencies for each service:

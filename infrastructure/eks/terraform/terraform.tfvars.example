@@ -1,0 +1,13 @@
+aws_region         = "ap-south-1"
+cluster_name       = "streamingapp-eks"
+kubernetes_version = "1.30"
+
+node_instance_types = ["t3.medium"]
+node_desired_size   = 2
+node_min_size       = 2
+node_max_size       = 4
+node_disk_size_gb   = 30
+
+# Replace with your public IP /32 before exposing the cluster endpoint.
+# Example: ["203.0.113.10/32"]
+allowed_cluster_public_access_cidrs = ["0.0.0.0/0"]

@@ -1,0 +1,30 @@
+---
+# Values sourced from Terraform outputs (../terraform) so the EC2 cloud-agent
+# configuration always matches the infrastructure that Terraform created.
+# Populated automatically by scripts/render-tfvars.sh before every playbook run
+# (see README.md) - do not hardcode instance-specific values here.
+
+jenkins_admin_user: admin
+jenkins_admin_password: admin
+
+aws_region: "{{ lookup('ansible.builtin.env', 'AWS_REGION') | default('ap-southeast-1', true) }}"
+
+jenkins_agent_ami: "{{ tf_jenkins_agent_ami }}"
+jenkins_agent_security_group_id: "{{ tf_jenkins_agent_security_group_id }}"
+jenkins_agent_subnet_id: "{{ tf_jenkins_agent_subnet_id }}"
+jenkins_agent_instance_profile: "{{ tf_jenkins_agent_instance_profile }}"
+jenkins_agent_key_name: "{{ tf_jenkins_agent_key_name }}"
+jenkins_agent_private_key: "{{ lookup('ansible.builtin.file', tf_jenkins_agent_private_key_path) }}"
+
+jenkins_agent_max_total_instances: 3
+jenkins_agent_min_idle_instances: 1
+
+jenkins_plugins:
+  - configuration-as-code
+  - ec2
+  - docker-plugin
+  - docker-workflow
+  - ssh-credentials
+  - ssh-slaves
+  - credentials-binding
+  - matrix-auth

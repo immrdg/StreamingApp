@@ -1,0 +1,2 @@
+[tag_role_Jenkins]
+jenkins_srv ansible_host=18.141.224.146 ansible_user=ec2-user ansible_ssh_private_key_file=/Users/gireesh/Learn/HeroVired/AWS/Devops/EKS/StreamingApp/StreamingApp/infrastructure/jenkins/terraform/generated/jenkins-controller.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'

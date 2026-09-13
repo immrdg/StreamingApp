@@ -26,7 +26,7 @@ const Thumbnail = styled('div')(() => ({
 const Overlay = styled(Box)(({ theme }) => ({
   position: 'absolute',
   inset: 0,
-  background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.7) 80%)',
+  background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.75) 50%, rgba(0,0,0,0.9) 100%)',
   color: theme.palette.common.white,
   display: 'flex',
   flexDirection: 'column',
@@ -47,13 +47,27 @@ export const VideoCard = ({ video, onPlay, onInfo }) => {
     <CardContainer onClick={() => onInfo?.(video)}>
       <Thumbnail style={{ backgroundImage: `url(${video.thumbnailUrl})` }} />
       <Overlay>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }} noWrap>
+        <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ gap: 1 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 600,
+              color: '#fff',
+              flexGrow: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              wordBreak: 'break-word',
+              lineHeight: 1.2,
+            }}
+          >
             {video.title}
           </Typography>
           <IconButton
             size="small"
-            sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: '#fff' }}
+            sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: '#fff', flexShrink: 0 }}
             onClick={(event) => {
               event.stopPropagation();
               onPlay?.(video);
