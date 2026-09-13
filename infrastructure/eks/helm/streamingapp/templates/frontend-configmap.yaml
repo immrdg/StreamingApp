@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/component: frontend
 data:
   env-config.js: |
-    window.REACT_APP_AUTH_API_URL = "{{ .Values.frontend.apiUrls.auth | default (printf "http://%s/api/auth" .Values.ingress.host) }}";
-    window.REACT_APP_STREAMING_API_URL = "{{ .Values.frontend.apiUrls.streaming | default (printf "http://%s/api/streaming" .Values.ingress.host) }}";
-    window.REACT_APP_STREAMING_PUBLIC_URL = "{{ .Values.frontend.apiUrls.streamingPublic | default (printf "http://%s" .Values.ingress.host) }}";
-    window.REACT_APP_ADMIN_API_URL = "{{ .Values.frontend.apiUrls.admin | default (printf "http://%s/api/admin" .Values.ingress.host) }}";
-    window.REACT_APP_CHAT_API_URL = "{{ .Values.frontend.apiUrls.chat | default (printf "http://%s/api/chat" .Values.ingress.host) }}";
-    window.REACT_APP_CHAT_SOCKET_URL = "{{ .Values.frontend.apiUrls.chatSocket | default (printf "http://%s" .Values.ingress.host) }}";
+    window.REACT_APP_AUTH_API_URL = "/api/auth";
+    window.REACT_APP_STREAMING_API_URL = "/api/streaming";
+    window.REACT_APP_STREAMING_PUBLIC_URL = "";
+    window.REACT_APP_ADMIN_API_URL = "/api/admin";
+    window.REACT_APP_CHAT_API_URL = "/api/chat";
+    window.REACT_APP_CHAT_SOCKET_URL = "";

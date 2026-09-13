@@ -1,0 +1,116 @@
+# Custom values for EKS deployment
+# Auto-generated: Sun Sep 13 20:48:31 IST 2026
+
+global:
+  imageRegistry: "258274811560.dkr.ecr.ap-southeast-1.amazonaws.com"
+  imagePullPolicy: Always
+
+# Latest image tags from ECR
+imageTags:
+  frontend: "20260913_144537"
+  auth: "62dc470-3"
+  admin: "20260913_151413"
+  chat: "20260913_151514"
+  streaming: "3fb755a-2"
+
+config:
+  mongoDatabase: streamingapp
+  clientUrls: "http://streamingapp.local,http://localhost:3000"
+  awsRegion: ap-southeast-1
+  awsS3Bucket: ""
+  awsCdnUrl: ""
+  streamingPublicUrl: "http://streamingapp.local"
+
+secrets:
+  jwtSecret: "streamingapp-jwt-secret-change-in-production"
+  awsAccessKeyId: ""
+  awsSecretAccessKey: ""
+
+services:
+  auth:
+    image: streamingapp-auth
+    replicas: 2
+    port: 3001
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  
+  streaming:
+    image: streamingapp-streaming
+    replicas: 2
+    port: 3002
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  
+  admin:
+    image: streamingapp-admin
+    replicas: 2
+    port: 3003
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  
+  chat:
+    image: streamingapp-chat
+    replicas: 2
+    port: 3004
+    healthPath: /api/health
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  
+  frontend:
+    image: streamingapp-frontend
+    replicas: 2
+    port: 80
+    healthPath: /
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+mongo:
+  image: mongo:6
+  port: 27017
+  storageSize: 5Gi
+  storageClassName: "gp2"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: streamingapp.local
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  tls:
+    enabled: false
+    secretName: streamingapp-tls
