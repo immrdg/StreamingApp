@@ -14,6 +14,7 @@ const buildAwsCredentials = () => {
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: buildAwsCredentials(),
+  endpoint: process.env.AWS_REGION ? `https://s3.${process.env.AWS_REGION}.amazonaws.com` : undefined,
   useAccelerateEndpoint: false,
   useArnRegion: true,
 });
