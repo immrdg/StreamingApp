@@ -1,12 +1,3 @@
-```groovy
-#!/usr/bin/env groovy
-
-/**
- * StreamingApp Frontend - Production CI/CD Pipeline
- * Region: ap-southeast-1
- * No parameters required
- */
-
 pipeline {
 
     agent {
@@ -318,4 +309,3 @@ EOF
         }
     }
 }
-```
