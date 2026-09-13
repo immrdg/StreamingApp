@@ -14,6 +14,7 @@ const buildAwsCredentials = () => {
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: buildAwsCredentials(),
+  forcePathStyle: false,
 });
 
 const buildPublicUrl = (key) => {
